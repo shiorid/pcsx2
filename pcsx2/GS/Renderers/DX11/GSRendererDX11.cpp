@@ -441,12 +441,17 @@ void GSRendererDX11::EmulateBlending(u8& afix)
 {
 	// Partial port of OGL SW blending. Currently only works for accumulation and non recursive blend.
 
+	if (!m_vt.m_alpha.valid)
+		GetAlphaMinMax();
+
 	// AA1: Don't enable blending on AA1, not yet implemented on hardware mode,
 	// it requires coverage sample so it's safer to turn it off instead.
 	const bool aa1 = PRIM->AA1 && (m_vt.m_primclass == GS_LINE_CLASS);
+	// PABE: Check condition early as an optimization.
+	const bool pabe = PRIM->ABE && m_env.PABE.PABE && (m_vt.m_alpha.max < 128);
 
 	// No blending or coverage anti-aliasing so early exit
-	if (!(PRIM->ABE || m_env.PABE.PABE || aa1))
+	if (pabe || !(PRIM->ABE || aa1))
 		return;
 
 	m_om_bsel.abe = 1;
@@ -461,8 +466,6 @@ void GSRendererDX11::EmulateBlending(u8& afix)
 	const bool blend_non_recursive = !!(blend_flag & BLEND_NO_REC);
 
 	// BLEND MIX selection, use a mix of hw/sw blending
-	if (!m_vt.m_alpha.valid && (ALPHA.C == 0))
-		GetAlphaMinMax();
 	const bool blend_mix1 = !!(blend_flag & BLEND_MIX1);
 	const bool blend_mix2 = !!(blend_flag & BLEND_MIX2);
 	const bool blend_mix3 = !!(blend_flag & BLEND_MIX3);
