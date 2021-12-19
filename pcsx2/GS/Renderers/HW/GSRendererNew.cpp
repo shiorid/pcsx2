@@ -1224,16 +1224,23 @@ void GSRendererNew::DrawPrims(GSTexture* rt, GSTexture* ds, GSTextureCache::Sour
 	// DATE: selection of the algorithm. Must be done before blending because GL42 is not compatible with blending
 	if (DATE)
 	{
-		if (m_prim_overlap == PRIM_OVERLAP_NO || m_texture_shuffle)
+		const bool fbmask = (m_context->FRAME.FBMSK & 0x80000000);
+		const bool no_overlap = (m_prim_overlap == PRIM_OVERLAP_NO);
+		if (fbmask || no_overlap || m_texture_shuffle)
 		{
-			// It is way too complex to emulate texture shuffle with DATE. So just use
-			// the slow but accurate algo
-			GL_PERF("DATE: With %s", m_texture_shuffle ? "texture shuffle" : "no prim overlap");
+			// It is way too complex to emulate texture shuffle with DATE.
+			// So just use the slow but accurate algo
+			GL_PERF("DATE: Accurate with %s", fbmask ? "FBMASK" : no_overlap ? "no overlap" : "texture shuffle");
 			if (m_dev->Features().texture_barrier)
 			{
 				m_conf.require_full_barrier = true;
 				DATE_GL45 = true;
 			}
+		}
+		else if (m_context->FBA.FBA)
+		{
+			DATE_one = !m_context->TEST.DATM;
+			GL_PERF("DATE: Fast with FBA, all pixels will be >= 128");
 		}
 		else if (m_conf.colormask.wa && !m_context->TEST.ATE)
 		{
@@ -1257,7 +1264,7 @@ void GSRendererNew::DrawPrims(GSTexture* rt, GSTexture* ds, GSTextureCache::Sour
 			{
 				// texture barrier will split the draw call into n draw call. It is very efficient for
 				// few primitive draws. Otherwise it sucks.
-				GL_PERF("DATE: Slow with alpha %d-%d", m_vt.m_alpha.min, m_vt.m_alpha.max);
+				GL_PERF("DATE: Accurate with alpha %d-%d", m_vt.m_alpha.min, m_vt.m_alpha.max);
 				if (m_dev->Features().texture_barrier)
 				{
 					m_conf.require_full_barrier = true;
@@ -1267,7 +1274,7 @@ void GSRendererNew::DrawPrims(GSTexture* rt, GSTexture* ds, GSTextureCache::Sour
 			else if (m_accurate_date)
 			{
 				// Note: Fast level (DATE_one) was removed as it's less accurate.
-				GL_PERF("DATE: Full AD with alpha %d-%d", m_vt.m_alpha.min, m_vt.m_alpha.max);
+				GL_PERF("DATE: Accurate with alpha %d-%d", m_vt.m_alpha.min, m_vt.m_alpha.max);
 				if (m_dev->Features().image_load_store)
 				{
 					DATE_GL42 = true;
